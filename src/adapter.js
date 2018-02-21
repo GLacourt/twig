@@ -1,27 +1,23 @@
 'use strict';
 
 const Fractal = require('@frctl/fractal');
-const _ = require('lodash');
-const Path = require('path');
-const utils = Fractal.utils;
+const _       = require('lodash');
+const Path    = require('path');
+const utils   = Fractal.utils;
 
 class TwigAdapter extends Fractal.Adapter {
 
     constructor(Twig, source, app, config) {
 
         super(Twig, source);
-        this._app = app;
+        this._app    = app;
         this._config = config;
 
         let self = this;
 
-        Twig.extend(function(Twig) {
+        Twig.extend(function (Twig) {
 
-            /*
-             * Register a Fractal template loader. Locations can be handles or paths.
-             */
-
-            Twig.Templates.registerLoader('fractal', function(location, params, callback, errorCallback) {
+            Twig.Templates.registerLoader('fractal', function (location, params, callback, errorCallback) {
 
                 let parser = Twig.Templates.parsers['twig'];
 
@@ -29,8 +25,26 @@ class TwigAdapter extends Fractal.Adapter {
                     params.data = params.precompiled;
                 } else {
                     let view = isHandle(location) ? self.getView(location) : _.find(self.views, {path: Path.join(source.fullPath, location)});
-                    if (!view) {
 
+                    if (!view) {
+                        /** We normalize the path @namespace/component.twig to @component.twig */
+                        if (location.includes('/')) {
+                            location = location
+                                .substr(location.lastIndexOf('/'))
+                                .replace('/', self._handlePrefix);
+                        }
+
+                        /** We remove ext if exist */
+                        if (location.endsWith('.twig')) {
+                            location = location.replace('.twig', '');
+                        }
+
+                        /** We search for an occurence of our new location */
+                        view = isHandle(location) ?
+                            self.getView(location) : _.find(self.views, {path: Path.join(source.fullPath, location)});
+                    }
+
+                    if (!view) {
                         throw new Error(`Template ${location} not found`);
                     }
                     params.data = view.content;
@@ -45,8 +59,8 @@ class TwigAdapter extends Fractal.Adapter {
              * Without this _self would always refer to the root component.
              */
 
-            const render = Twig.Template.prototype.render;
-            Twig.Template.prototype.render = function(context, params) {
+            const render                   = Twig.Template.prototype.render;
+            Twig.Template.prototype.render = function (context, params) {
 
                 if (!self._config.pristine && this.id) {
 
@@ -63,11 +77,11 @@ class TwigAdapter extends Fractal.Adapter {
 
                     if (handle) {
                         let prefixMatcher = new RegExp(`^\\${self._config.handlePrefix}`);
-                        let entity = source.find(handle.replace(prefixMatcher, '@'));
+                        let entity        = source.find(handle.replace(prefixMatcher, '@'));
                         if (entity) {
                             entity = entity.isVariant ? entity : entity.variants().default();
                             if (config.importContext) {
-                                context = utils.defaultsDeep(_.cloneDeep(context), entity.getContext());
+                                context       = utils.defaultsDeep(_.cloneDeep(context), entity.getContext());
                                 context._self = entity.toJSON();
                                 setKeys(context);
                             }
@@ -83,10 +97,10 @@ class TwigAdapter extends Fractal.Adapter {
                 function setKeys(obj) {
 
                     obj._keys = _.compact(_.map(obj, (val, key) => {
-                        return (_.isString(key) && ! key.startsWith('_')) ? key : undefined;
+                        return (_.isString(key) && !key.startsWith('_')) ? key : undefined;
                     }));
                     _.each(obj, (val, key) => {
-                        if (_.isPlainObject(val) && (_.isString(key) && ! key.startsWith('_'))) {
+                        if (_.isPlainObject(val) && (_.isString(key) && !key.startsWith('_'))) {
                             setKeys(val);
                         }
                     });
@@ -141,16 +155,16 @@ class TwigAdapter extends Fractal.Adapter {
             setEnv('_config', this._app.config(), context);
         }
 
-        return new Promise(function(resolve, reject){
+        return new Promise(function (resolve, reject) {
 
             let tplPath = Path.relative(self._source.fullPath, path);
 
             try {
                 let template = self.engine.twig({
-                    method: 'fractal',
-                    async: false,
-                    rethrow: true,
-                    name: meta.self ? `${self._config.handlePrefix}${meta.self.handle}` : tplPath,
+                    method:      'fractal',
+                    async:       false,
+                    rethrow:     true,
+                    name:        meta.self ? `${self._config.handlePrefix}${meta.self.handle}` : tplPath,
                     precompiled: str
                 });
                 resolve(template.render(context));
@@ -169,11 +183,11 @@ class TwigAdapter extends Fractal.Adapter {
 
 }
 
-module.exports = function(config) {
+module.exports = function (config) {
 
     config = _.defaults(config || {}, {
-        pristine: false,
-        handlePrefix: '@',
+        pristine:      false,
+        handlePrefix:  '@',
         importContext: false
     });
 
@@ -184,33 +198,33 @@ module.exports = function(config) {
             const Twig = require('twig');
 
             if (!config.pristine) {
-                _.each(require('./functions')(app) || {}, function(func, name){
+                _.each(require('./functions')(app) || {}, function (func, name) {
                     Twig.extendFunction(name, func);
                 });
-                _.each(require('./filters')(app), function(filter, name){
+                _.each(require('./filters')(app), function (filter, name) {
                     Twig.extendFilter(name, filter);
                 });
-                _.each(require('./tests')(app), function(test, name){
+                _.each(require('./tests')(app), function (test, name) {
                     Twig.extendTest(name, test);
                 });
-                Twig.extend(function(Twig) {
-                    _.each(require('./tags')(app), function(tag){
+                Twig.extend(function (Twig) {
+                    _.each(require('./tags')(app), function (tag) {
                         Twig.exports.extendTag(tag(Twig));
                     });
                 });
             }
 
-            _.each(config.functions || {}, function(func, name){
+            _.each(config.functions || {}, function (func, name) {
                 Twig.extendFunction(name, func);
             });
-            _.each(config.filters || {}, function(filter, name){
+            _.each(config.filters || {}, function (filter, name) {
                 Twig.extendFilter(name, filter);
             });
-            _.each(config.tests || {}, function(test, name){
+            _.each(config.tests || {}, function (test, name) {
                 Twig.extendTest(name, test);
             });
-            Twig.extend(function(Twig) {
-                _.each(config.tags || {}, function(tag){
+            Twig.extend(function (Twig) {
+                _.each(config.tags || {}, function (tag) {
                     Twig.exports.extendTag(tag(Twig));
                 });
             });
